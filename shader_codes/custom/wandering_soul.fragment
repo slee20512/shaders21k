@@ -1,0 +1,36 @@
+{
+ "ver": "0.1",
+ "info": {
+  "id": "Wc2fzt",
+  "date": "0",
+  "viewed": 0,
+  "name": "Fork Wandering slee20512",
+  "description": "A shader based on an equation. ",
+  "likes": 0,
+  "published": "Private",
+  "usePreview": 0,
+  "tags": [
+   "2d",
+   "light",
+   "spirit"
+  ],
+  "hasliked": 0,
+  "parentid": "3fjfzt",
+  "parentname": "Wandering Spirit"
+ },
+ "renderpass": [
+  {
+   "inputs": [],
+   "outputs": [
+    {
+     "id": "4dfGRr",
+     "channel": 0
+    }
+   ],
+   "code": "// By Shadow\n// L = S_0 · κ · α · θ · γ · ψ · P(E|D)^2 · β · ∑|ψ_i|^2 · exp(...) · (ω · e^(...))\n\n// A simple hash function to generate procedural noise.\nvec2 hash( vec2 p ) {\n\tp = vec2( dot(p,vec2(127.1,311.7)), dot(p,vec2(269.5,183.3)) );\n\treturn -1.0 + 2.0 * fract(sin(p)*43758.5453123);\n}\n\n// Procedural noise function (Value Noise). This is our 'ψ'.\nfloat noise( in vec2 p ) {\n    vec2 i = floor( p );\n    vec2 f = fract( p );\n\tf = f*f*(3.0-2.0*f); // Smoother interpolation\n    return mix(mix(dot(hash(i+vec2(0.,0.)),f-vec2(0.,0.)),\n                   dot(hash(i+vec2(1.,0.)),f-vec2(1.,0.)),f.x),\n               mix(dot(hash(i+vec2(0.,1.)),f-vec2(0.,1.)),\n                   dot(hash(i+vec2(1.,1.)),f-vec2(1.,1.)),f.x),f.y);\n}\n\n// Main image function\nvoid mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n    // Normalize coordinates and correct for aspect ratio\n    vec2 uv = (fragCoord * 2.0 - iResolution.xy) / iResolution.y;\n    \n    // --- Interpreting the Equation ---\n    \n    // T: Time, the driver of our cosmic evolution.\n    float T = iTime * 0.2;\n\n    // S_0: The baseline signal. A slow-moving, dark cosmic background.\n    float S0 = noise(uv * 0.5 + T * 0.1) * 0.2;\n    vec3 col = vec3(0.05, 0.0, 0.1) * (0.5 + S0);\n\n    // ∑|ψ_i|^2: Sum of \"wave functions\". We'll use multiple layers of noise (FBM).\n    // This creates the swirling, gaseous look of our nebula.\n    float sum_psi_sq = 0.0;\n    float scale = 2.0;\n    float amp = 0.5;\n    for (int i = 0; i < 5; i++) {\n        // Distort the domain for a swirling effect\n        float n = noise(uv * scale + vec2(sin(T*0.5), cos(T*0.5)) * 0.2);\n        sum_psi_sq += n * amp;\n        scale *= 2.0;\n        amp *= 0.5;\n    }\n    col += vec3(0.2, 0.3, 0.8) * abs(sum_psi_sq);\n\n    // D: The position of our main \"discovery\" event. Controlled by the mouse or animated.\n    vec2 D = (iMouse.z > 0.0) ? (iMouse.xy * 2.0 - iResolution.xy) / iResolution.y : vec2(sin(T*0.7), cos(T*1.1)) * 0.8;\n    // E: The current pixel's position (our \"examination\" point).\n    vec2 E = uv;\n    \n    // exp(-|D - E|^2 / (δ·ε·σ^2)): A Gaussian function.\n    // This creates a central glowing orb, a concentration of energy.\n    // The Greek letters (δ, ε, σ) just become a single size parameter.\n    float sigma_sq = 0.1;\n    float dist_sq = dot(D - E, D - E);\n    float gaussian = exp(-dist_sq / sigma_sq);\n\n    // (ω · e^(λT/ε)): An exponential growth/decay term. We'll use it to make the core pulse.\n    // The Greek letters (ω, λ, ε) control the pulse speed and intensity.\n    float pulse = 0.7 + 0.3 * sin(iTime * 3.0);\n    col += vec3(1.0, 0.8, 0.5) * gaussian * pulse * 2.0;\n\n    // P(E|D)^2: A conditional probability squared.\n    // Let's make bright, high-frequency \"stars\" appear only where the Gaussian energy is high.\n    // The square ( ^2 ) creates a sharper, high-contrast transition.\n    float probability = smoothstep(0.1, 0.5, gaussian);\n    float stars = pow(noise(uv * 40.0 + T), 2.0); // Procedural stars\n    col += vec3(1.0, 1.0, 0.8) * stars * pow(probability, 2.0);\n    \n    // κ, α, θ, γ, β... The other constants. We'll just call them \"artistic license\"\n    // and use them to apply a final color grade and contrast.\n    col = pow(col, vec3(1.2)); // A little more contrast\n    col *= 1.3; // A bit more brightness\n\n    // L: The final Luminance/Color. Our masterpiece of numbers. \\\\_O_O_//\n    fragColor = vec4(col, 1.0);\n}",
+   "name": "Image",
+   "description": "",
+   "type": "image"
+  }
+ ]
+}

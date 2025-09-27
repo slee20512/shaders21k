@@ -12,9 +12,9 @@ import random
 
 from PIL import Image
 
-assert 'LD_LIBRARY_PATH' in os.environ.keys(), \
-       "LD_LIBRARY_PATH not set, you need to set it to point to annaconda to use this package (for example:\n" \
-       "export LD_LIBRARY_PATH=$HOME/anaconda3/lib"
+# assert 'LD_LIBRARY_PATH' in os.environ.keys(), \
+#        "LD_LIBRARY_PATH not set, you need to set it to point to annaconda to use this package (for example:\n" \
+#        "export LD_LIBRARY_PATH=$HOME/anaconda3/lib"
 
 # to make this work in parallel, on different threads all OpenGL packages must be imported after spawining the multiprocess.
 # solution from here: https://groups.google.com/g/pyglet-users/c/_wqyOiU2rN4
@@ -28,14 +28,16 @@ class RendererModernGL():
       if any([k in sys.modules for k in opengl_packages]):
         raise Exception("Importing opengl from the main thread may cause problems when this is also launched from child process (for example if the generator is in a dataloading class). "
                         "Remove imports or do not use this package in the main thread: " + str([k for k in opengl_packages if k in sys.modules]))
-    assert temporal_sampling in ['continuous', 'random'] or type(temporal_sampling) is list
+    assert temporal_sampling in ['continuous', 'random', 'linear_jitter'] or isinstance(temporal_sampling, list)
+
     if type(temporal_sampling) is list:
       assert len(temporal_sampling) == n_images_to_generate
     self.temporal_sampling_mode = temporal_sampling
     import moderngl
     self.moderngl = moderngl
     self.max_failed_samples = max_failed_samples
-
+    self.temporal_sampling = temporal_sampling
+    self.t0 = np.random.uniform(0.0, 10.0)
     self.resolution = resolution
     try:
       # 'egl' is only available on Linux. otherwise, use the default backend instead
@@ -126,6 +128,15 @@ class RendererModernGL():
       timestep = np.random.uniform(n_frame / self.fps, (n_frame + 1) / self.fps)
     elif self.temporal_sampling_mode == 'random':
       timestep = np.random.uniform(0.1, 10)
+    elif self.temporal_sampling == 'linear_jitter':
+        # paper schedule: t_k = t0 + k*(1/4) + ε,  ε ~ U[0,0.25]
+        if not hasattr(self, "t0"):
+            self.t0 = np.random.uniform(0.0, 10.0)
+        timestep = (
+            self.t0
+            + n_frame * (1.0 / self.fps)
+            + np.random.uniform(0.0, 0.25)
+        )
     elif type(self.temporal_sampling_mode) is list:
       timestep = self.temporal_sampling_mode[n_frame]
     else:
@@ -136,9 +147,16 @@ class RendererModernGL():
 
   def update_uniforms(self, program_i):
     uniforms = self.programs[program_i].get_uniforms(self.resolution, self.n_frames_generated, self.fps)
+    # Add paper-style time stepping
+    if self.temporal_sampling == 'linear_jitter':
+        # t_k = t0 + k*(1/4) + eps, eps ~ U[0, 0.25]
+        t = self.t0 + (self.n_frames_generated * (1.0 / self.fps)) + np.random.uniform(0.0, 0.25)
+        t_name = self.programs[program_i].get_timestep_uniform_str()  # typically 'iTime'
+        uniforms[t_name] = t
 
-    for uniform_name, uniform_value in uniforms.items():
-      self.update_uniform(program_i, uniform_name, uniform_value)
+    # Now push to the GPU
+    for name, val in uniforms.items():
+        self.update_uniform(program_i, name, val) 
 
     self.update_uniform_time(program_i, self.n_frames_generated)
 
@@ -215,14 +233,22 @@ class RendererModernGL():
 
         return
 
+# def get_program_from_shader_path(f):
+#   if 'shadertoy' in f:
+#     program = get_shadertoy_program_from_shader_path(f)
+#   elif 'twigl' in f:
+#     program = get_twigl_program_from_shader_path(f)
+#   else:
+#     raise Exception("Could not identify file as Shadertoy or Twigl: " + f)
+#   return program
+
+# def get_program_from_shader_path(f):
+#   with open(f, 'r') as fp:
+#     return fp.read()
+  
 def get_program_from_shader_path(f):
-  if 'shadertoy' in f:
-    program = get_shadertoy_program_from_shader_path(f)
-  elif 'twigl' in f:
-    program = get_twigl_program_from_shader_path(f)
-  else:
-    raise Exception("Could not identify file as Shadertoy or Twigl: " + f)
-  return program
+    return get_shadertoy_program_from_shader_path(f)
+
 
 def get_renderer_from_shader_path(f, renderer_kwargs=dict()):
   program = get_program_from_shader_path(f)

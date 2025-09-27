@@ -169,7 +169,9 @@ class ModernGLOnlineDataset(Dataset):
                        programs=self.programs,
                        n_images_to_generate=-1,
                        resolution=resolution,
-                       temporal_sampling='random',
+                      #  temporal_sampling='random',
+                       temporal_sampling='linear_jitter',  # new
+                       fps=4,                               # new
                        gpu=0,
                        consistency_check=consistency_check,
                        consistency_check_its=consistency_check_its)

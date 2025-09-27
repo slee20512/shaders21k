@@ -86,9 +86,12 @@ def get_stylegan_texture(i):
   return image
 
 def load_shader(shader_path):
-  out_fp = open(shader_path, "r")
-  shader_dict = json.load(out_fp)
-  out_fp.close()
+  # out_fp = open(shader_path, "r")
+  # shader_dict = json.load(out_fp)
+  # out_fp.close()
+
+  with open(shader_path, 'r', encoding='utf-8') as out_fp:
+    shader_dict = json.load(out_fp)
 
   shaderId = shader_dict['info']['id']
   shader_dict['info']['url'] = 'https://www.shadertoy.com/view/' + shaderId
