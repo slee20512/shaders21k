@@ -18,6 +18,23 @@ from PIL import Image
 
 # to make this work in parallel, on different threads all OpenGL packages must be imported after spawining the multiprocess.
 # solution from here: https://groups.google.com/g/pyglet-users/c/_wqyOiU2rN4
+
+vertex_shader_moderngl = '''
+#version 330
+in vec2 in_vert;
+void main() {
+    gl_Position = vec4(in_vert, 0.0, 1.0);
+}
+'''
+vertices_moderngl = np.array([
+    -1.0, -1.0,
+     1.0, -1.0,
+    -1.0,  1.0,
+    -1.0,  1.0,
+     1.0, -1.0,
+     1.0,  1.0,
+], dtype='f4')
+
 class RendererModernGL():
   def __init__(self, programs, n_images_to_generate=100, fps=10,
                debug=False, completed_file=None, resolution=256,
@@ -42,7 +59,13 @@ class RendererModernGL():
     try:
       # 'egl' is only available on Linux. otherwise, use the default backend instead
       backend = dict(backend="egl") if platform.system() == "Linux" else dict()
-      self.ctx = moderngl.create_context(standalone=True, **backend, require=OPENGL_REQUIRED_VERSION, device_index=gpu)
+      try:
+          self.ctx = moderngl.create_context(standalone=True, **backend, require=OPENGL_REQUIRED_VERSION, device_index=gpu)
+      except Exception:
+          print("[!] Falling back to default backend (no EGL)")
+          self.ctx = moderngl.create_context(standalone=True)
+
+            # self.ctx = moderngl.create_context(standalone=True, **backend, require=OPENGL_REQUIRED_VERSION, device_index=gpu)
       self.fbo = self.ctx.simple_framebuffer((self.resolution, self.resolution), components=4)
       self.fbo.use()
 
@@ -68,6 +91,8 @@ class RendererModernGL():
     if not type(programs) is list:
       programs = [programs]
     self.programs = programs
+    self.modes = [('classic',)] * len(self.programs)
+
 
     last_fragment_failed_name = None
     last_exception = None
@@ -79,25 +104,30 @@ class RendererModernGL():
         compiled_prog = self.ctx.program(vertex_shader=vertex_shader_moderngl, fragment_shader=frag_shader)
         vao = self.ctx.simple_vertex_array(compiled_prog, self.ctx.buffer(vertices_moderngl), 'in_vert')
       except Exception as e:
-        print("Failed program: ".format(program.get_name()))
-        print("With exception: ")
-        print(e)
-        raise e
-
+        print(f"[GLSL ERROR] Failed to compile shader {self.programs[i].name if hasattr(self.programs[i],'name') else i}: {e}")
+        return None  # skip this shader
       return frag_shader, compiled_prog, vao
 
     compiled_info = process_in_parallel_or_not(compile_single_program, range(len(self.programs)), parallel=False)
-
+    compiled_info = [k for k in compiled_info if k is not None]  # <-- filter out failed ones
+    if not compiled_info:
+        raise RuntimeError("No shaders compiled successfully. Check GLSL errors above.")
     self.frag_shader_codes = [k[0] for k in compiled_info]
     self.compiled_progs = [k[1] for k in compiled_info]
     self.vaos = [k[2] for k in compiled_info]
 
     if len(self.frag_shader_codes) != len(self.programs):
-      self.release()
+      print(f"[WARNING] {self.frag_shader_codes} shaders failed to compile out of {len(self.programs)}. Skipping failed ones.")
+      # Keep only successfully compiled programs
+      self.programs = [self.programs[i] for i, k in enumerate(compiled_info)]
+      if len(self.programs) == 0:
+          raise RuntimeError("[ERROR] No valid shaders left after filtering.")
 
-      raise Exception("Failed to compile some shaders: {} of {}\n"
-                      "Last fragment failed: {} with exception:\n"
-                      "{}".format(len(self.frag_shader_codes), len(self.programs), last_fragment_failed_name, last_exception))
+      # self.release()
+
+      # raise Exception("Failed to compile some shaders: {} of {}\n"
+      #                 "Last fragment failed: {} with exception:\n"
+      #                 "{}".format(len(self.frag_shader_codes), len(self.programs), last_fragment_failed_name, last_exception))
     else:
       if len(self.frag_shader_codes) > 1:
         print("Correctly compiled {} fragments and prepared to start rendering.".format(len(self.frag_shader_codes)))
@@ -111,8 +141,14 @@ class RendererModernGL():
 
 
   def update_uniform(self, program_i, uniform_name, uniform_value):
-    if not self.compiled_progs[program_i].get(uniform_name, None) is None:
-      self.compiled_progs[program_i][uniform_name] = uniform_value
+    prog = self.compiled_progs[program_i]
+    if uniform_name in prog:
+        try:
+            prog[uniform_name].value = uniform_value
+        except Exception:
+            # fallback in case value is incompatible
+            pass
+
 
   def get_timestep_uniform_str(self, program_i):
     if self.modes[program_i][0] == 'classic':
@@ -182,6 +218,9 @@ class RendererModernGL():
     return False
 
   def __render__(self, store_folder='', store=False, show_progress=False, store_uniforms=False, shader_indices=None):
+    if not self.compiled_progs:
+      raise RuntimeError("No compiled programs available for rendering.")
+
     self.n_frames_generated = 0
     if not shader_indices is None:
       assert len(shader_indices) == self.n_images_to_generate
@@ -233,21 +272,22 @@ class RendererModernGL():
 
         return
 
-# def get_program_from_shader_path(f):
-#   if 'shadertoy' in f:
-#     program = get_shadertoy_program_from_shader_path(f)
-#   elif 'twigl' in f:
-#     program = get_twigl_program_from_shader_path(f)
-#   else:
-#     raise Exception("Could not identify file as Shadertoy or Twigl: " + f)
-#   return program
-
-# def get_program_from_shader_path(f):
-#   with open(f, 'r') as fp:
-#     return fp.read()
-  
 def get_program_from_shader_path(f):
-    return get_shadertoy_program_from_shader_path(f)
+  if 'shadertoy' in f:
+    program = get_shadertoy_program_from_shader_path(f)
+  elif 'twigl' in f:
+    program = get_twigl_program_from_shader_path(f)
+  else:
+    raise Exception("Could not identify file as Shadertoy or Twigl: " + f)
+  return program
+
+# # def get_program_from_shader_path(f):
+# #   with open(f, 'r') as fp:
+# #     return fp.read()
+  
+# def get_program_from_shader_path(f):
+    
+#     return get_shadertoy_program_from_shader_path(f)
 
 
 def get_renderer_from_shader_path(f, renderer_kwargs=dict()):

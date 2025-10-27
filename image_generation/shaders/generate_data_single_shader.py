@@ -23,12 +23,21 @@ def generate_dataset_with_n_fragments(output_path, total_samples, shader_file, r
 
   n_generated = 0
   while n_generated < total_samples:
-    image_folder, file = RendererModernGL.get_folder_and_filename(output_path, n_generated)
+    # when you want indices
+      # image_folder, file = RendererModernGL.get_folder_and_filename(output_path, n_generated)
 
-    if not os.path.exists(file) or overwrite:
-      os.makedirs(image_folder, exist_ok=True)
-      image, program_i = dataset.__getitem__(0)
-      cv2_imwrite(tonumpy(image) * 255, file)
+      # if not os.path.exists(file) or overwrite:
+      #   os.makedirs(image_folder, exist_ok=True)
+      #   image, program_i = dataset.__getitem__(0)
+      #   cv2_imwrite(tonumpy(image) * 255, file)
+    shader_id = os.path.splitext(os.path.basename(shader_file))[0]
+    img_path = os.path.join(output_path, f"{shader_id}.png")
+
+    image, _ = dataset.__getitem__(0)
+    img_np = (tonumpy(image) * 255).astype(np.uint8)
+    cv2_imwrite(img_np, img_path)
+    print(f"[Saved] {img_path}")
+
 
     p_bar.update(1)
     n_generated += 1

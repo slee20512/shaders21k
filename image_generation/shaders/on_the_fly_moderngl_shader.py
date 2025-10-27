@@ -156,8 +156,15 @@ class ModernGLOnlineDataset(Dataset):
 
     print("Reading shaders")
     for shader_path in tqdm(shader_paths):
-      shader_path = base_shaders_path + shader_path
-      self.programs.append(get_program_from_shader_path(shader_path))
+        shader_path = base_shaders_path + shader_path
+        if not os.path.exists(shader_path):
+            print(f"[SKIP] Missing shader file: {shader_path}")
+            continue
+        try:
+            self.programs.append(get_program_from_shader_path(shader_path))
+        except Exception as e:
+            print(f"[ERROR] Could not load {shader_path}: {e}")
+            continue
 
     self.mp_manager = mp.Manager()
     self.lock = Lock()

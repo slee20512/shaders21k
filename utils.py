@@ -152,7 +152,9 @@ def read_text_file_lines(filename, stop_at=-1):
   return lines
 
 def write_text_file_lines(lines, file):
-  assert type(lines) is list, "Lines should be a list of strings"
+  # assert type(lines) is list, "Lines should be a list of strings"
+  assert isinstance(lines, (list, tuple)), f"Lines should be list-like, got {type(lines)}"
+
   with open(file, 'w') as file_handler:
     for item in lines:
       file_handler.write("%s\n" % item)

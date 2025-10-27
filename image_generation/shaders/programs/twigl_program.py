@@ -120,13 +120,28 @@ class TwiglProgram():
     return n + r + i + shader_code + o
 
 
-def get_twigl_program_from_shader_path(shader_path):
-  fragment_name = shader_path.split('/')[-1].split('.')[0]
+# def get_twigl_program_from_shader_path(shader_path):
+#   fragment_name = shader_path.split('/')[-1].split('.')[0]
 
-  fragment_code_file = '{}/fragments/{}.fragment'.format(TWIGL_FRAGMENTS_WITH_MODE_MODERNGL, fragment_name)
-  fragment_mode_file = '{}/modes/{}.fragment'.format(TWIGL_FRAGMENTS_WITH_MODE_MODERNGL, fragment_name)
+#   # fragment_code_file = '{}/json/{}.fragment'.format(TWIGL_FRAGMENTS_WITH_MODE_MODERNGL, fragment_name)
+#   # fragment_mode_file = '{}/modes/{}.fragment'.format(TWIGL_FRAGMENTS_WITH_MODE_MODERNGL, fragment_name)
+#   fragment_code_file = f'/ccn2/u/seojinl/shaders21k/shader_codes/twigl/codes/{fragment_name}.fragment'
+#   fragment_mode_file = f'/ccn2/u/seojinl/shaders21k/shader_codes/twigl/modes/{fragment_name}.fragment'
+#   shader_code = read_text_file(fragment_code_file)
+#   mode = read_text_file_lines(fragment_mode_file)
 
-  shader_code = read_text_file(fragment_code_file)
-  mode = read_text_file_lines(fragment_mode_file)
+#   return TwiglProgram(shader_code, mode, fragment_name)
 
-  return TwiglProgram(shader_code, mode, fragment_name)
+def get_twigl_program_from_shader_path(path):
+    """Load a Twigl shader from the local folder structure."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Twigl shader not found at: {path}")
+
+    fragment_name = os.path.basename(path).split('.')[0]
+    fragment_code_file = f'/ccn2/u/seojinl/shaders21k/shader_codes/twigl/codes/{fragment_name}.fragment'
+    fragment_mode_file = f'/ccn2/u/seojinl/shaders21k/shader_codes/twigl/modes/{fragment_name}.fragment'
+
+    shader_code = read_text_file(fragment_code_file)
+    mode = read_text_file_lines(fragment_mode_file)
+
+    return TwiglProgram(shader_code, mode, fragment_name)
